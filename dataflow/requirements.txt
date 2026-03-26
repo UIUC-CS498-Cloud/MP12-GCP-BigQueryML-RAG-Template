@@ -1,0 +1,4 @@
+apache-beam[gcp]
+google-genai
+google-cloud-bigquery
+google-cloud-aiplatform
