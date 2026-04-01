@@ -3,8 +3,8 @@ import json
 import requests
 
 # === Fill in your submission info ===
-YOUR_NETID = "[NETID]"  # <Your NetID>
-YOUR_EMAIL = "[EMAIL_ADDRESS]"  # <Your Email>
+YOUR_EMAIL = ""  # <Your Email>
+YOUR_SECRET = ""  # <Your Secret>
 
 # === Fill in your deployed endpoint URLs ===
 UPLOAD_KB_URL = ""  # https://<region>-<project>.cloudfunctions.net/upload-kb
@@ -16,15 +16,14 @@ GET_TICKET_RESOLUTIONS_URL = (
 
 # === Fill in the autograder API Gateway URL ===
 API_GATEWAY_URL = (
-    # "https://5lvtlkpp6hgzth3zajn5wihmgu0mfpex.lambda-url.us-east-1.on.aws/"
-    ""  # TODO: fill in
+    "https://rta00ohom6.execute-api.us-east-1.amazonaws.com/prod/mp12-gcp-bigqueryml-rag"
 )
 
 REQUEST_TIMEOUT_SECONDS = 620
 
 required_values = {
-    "YOUR_NETID": YOUR_NETID,
     "YOUR_EMAIL": YOUR_EMAIL,
+    "YOUR_SECRET": YOUR_SECRET,
     "UPLOAD_KB_URL": UPLOAD_KB_URL,
     "RETRIEVE_KB_URL": RETRIEVE_KB_URL,
     "PUBLISH_TICKET_URL": PUBLISH_TICKET_URL,
@@ -37,8 +36,8 @@ if missing_values:
     raise SystemExit(f"Missing required values: {', '.join(missing_values)}")
 
 input_payload = {
-    "netid": YOUR_NETID.strip(),
     "email": YOUR_EMAIL.strip(),
+    "secret": YOUR_SECRET.strip(),
     "upload_kb_url": UPLOAD_KB_URL.strip(),
     "retrieve_kb_url": RETRIEVE_KB_URL.strip(),
     "publish_ticket_url": PUBLISH_TICKET_URL.strip(),
