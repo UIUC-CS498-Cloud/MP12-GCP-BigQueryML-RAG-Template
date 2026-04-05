@@ -31,6 +31,8 @@ Spring 2026:
 
 > Claim [HERE](https://urldefense.com/v3/__https://gcp.secure.force.com/GCPEDU?cid=i7scApKRA7*2F1tpCSTefKMF8Rpz290MrS7EojCfb7uBlj3vshN3UtjRkQvV9VhDOe*__;JS8!!DZ3fjg!95YZsYxbDy28eoTXKA2ZNngQUjsRILlzA1ByS9zmdeAdq_dpX6OA69vQpViO0P7vynjEkIoM3SL2Uv_VJHYGCBMUhIClcDo$)
 >
+> Important: you need your `@illinois.edu` / UIUC email to redeem the education credit, but you should apply that credit to a personal Google Cloud account because UIUC-managed accounts do not support using GCP directly.
+>
 > You can request a coupon from the URL and redeem it until: 5/13/2026
 >
 > Coupon valid through: 1/13/2027
@@ -45,15 +47,17 @@ gcloud auth login
 
 ### 0.2 Create or Select a GCP Project
 
-Create a GCP project and attach your billing credits to it.
+Create a GCP project in your personal Google Cloud account and attach your redeemed billing credit to it.
 
 ```bash
 # Create a new project (project ID must be globally unique)
-gcloud projects create YOUR_PROJECT_ID --name="cs498cca-mvp"
+gcloud projects create YOUR_PROJECT_ID --name="YOUR_PROJECT_NAME"
 
 # Set it as the active project
 gcloud config set project YOUR_PROJECT_ID
 ```
+
+`PROJECT_ID` is the globally unique identifier used by GCP and CLI commands, while `PROJECT_NAME` is the human-readable display name you see in the console.
 
 ### 0.3 Enable APIs
 
