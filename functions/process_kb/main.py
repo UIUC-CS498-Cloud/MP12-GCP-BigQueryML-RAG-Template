@@ -86,6 +86,6 @@ def process_kb_document(cloud_event):
     # 4. Prepare metadata (source_doc, category)
     # 5. Insert the chunk data (chunk_id, source_document, text, embedding, category) into BigQuery
     #    - Table ID format: {bq_client.project}.{DATASET_NAME}.knowledge_chunks
-    #    - Recommendation: Delete existing chunks for the same document before inserting new ones (Upsert)
+    #    - YOU MUST delete existing chunks with same `source_document` before inserting new ones (Upsert)
 
     pass

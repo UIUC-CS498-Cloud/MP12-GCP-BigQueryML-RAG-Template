@@ -40,6 +40,44 @@ This test uploads hidden KB documents and polls `retrieve_kb` to verify they are
 **Empty `chunks` list / Hidden values not found**
 
 - **`process_kb` trigger not configured** – The function must be triggered by `google.cloud.storage.object.v1.finalized` on `${BUCKET_NAME}`.
+- **Eventarc service agent propagation error during deploy** – If deployment failed with `Permission denied while using the Eventarc Service Agent`, this should only happen when `eventarc.googleapis.com` was just enabled. Wait a few minutes and redeploy. If it still fails, run:
+  ```bash
+  PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
+  EVENTARC_SA="service-${PROJECT_NUMBER}@gcp-sa-eventarc.iam.gserviceaccount.com"
+
+  gcloud projects get-iam-policy ${PROJECT_ID} \
+    --flatten="bindings[].members" \
+    --filter="bindings.members:serviceAccount:${EVENTARC_SA}" \
+    --format="table(bindings.role)"
+  ```
+  If `roles/eventarc.serviceAgent` is missing, run:
+  ```bash
+  gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${EVENTARC_SA}" \
+    --role="roles/eventarc.serviceAgent"
+  ```
+- **Cloud Storage service account cannot publish to Pub/Sub** – If deployment failed with `The Cloud Storage service account for your bucket is unable to publish to Cloud Pub/Sub topics in the specified project`, grant the bucket's Cloud Storage service agent the Pub/Sub Publisher role:
+  ```bash
+  GCS_SA=$(gcloud storage service-agent --project=${PROJECT_ID})
+
+  gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${GCS_SA}" \
+    --role="roles/pubsub.publisher"
+  ```
+  Then rerun:
+  ```bash
+  gcloud functions deploy process-kb-document \
+    --gen2 \
+    --runtime python312 \
+    --region ${REGION} \
+    --source . \
+    --entry-point process_kb_document \
+    --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
+    --trigger-event-filters="bucket=${BUCKET_NAME}" \
+    --memory 1Gi \
+    --timeout 540s \
+    --set-env-vars DATASET_NAME=${DATASET_NAME}
+  ```
 - **`process_kb` is crashing** – Check logs: `gcloud functions logs read process-kb-document --gen2 --region ${REGION} --limit 50`
 - **Stale Data / Duplicate Chunks** – If the autograder runs multiple times, BigQuery may contain multiple versions of the same "hidden" document.
   - **Upsert Strategy:** Ensure `process_kb` deletes existing chunks for the same `source_document` before inserting.
@@ -78,6 +116,20 @@ This test polls `get_ticket_resolutions` until the hidden tickets are processed 
 - Check if Dataflow job is `Running`: `gcloud dataflow jobs list --region=${REGION} --filter="state=Running"`
 - Check Pub/Sub subscription for backlog: `gcloud pubsub subscriptions describe support-tickets-sub`
 - Check Dataflow logs for runtime errors (e.g., Gemini API key missing, BigQuery permission denied).
+- **Dataflow submission fails with `stage_file_with_retry ... 403`** – This happens before the job starts running, while Beam is uploading files to `gs://${BUCKET_NAME}/temp` or `gs://${BUCKET_NAME}/staging`.
+  First, authenticate Application Default Credentials:
+  ```bash
+  gcloud auth application-default login
+  ```
+  If it still fails, grant the default Compute Engine service account access to bucket objects:
+  ```bash
+  PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
+
+  gcloud storage buckets add-iam-policy-binding gs://${BUCKET_NAME} \
+    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+    --role="roles/storage.objectAdmin"
+  ```
+  Then rerun the Dataflow command. Warnings about `crcmod`, bucket soft delete, or `sdist` are not the root cause of the 403.
 
 **`incomplete resolution – missing fields`**
 

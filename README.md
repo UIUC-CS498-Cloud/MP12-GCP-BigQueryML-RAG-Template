@@ -71,7 +71,8 @@ gcloud services enable \
   dataflow.googleapis.com \
   cloudfunctions.googleapis.com \
   aiplatform.googleapis.com \
-  cloudbuild.googleapis.com
+  cloudbuild.googleapis.com \
+  eventarc.googleapis.com
 ```
 
 ### 0.4 Setup Environment
@@ -139,14 +140,14 @@ CREATE TABLE \`${PROJECT_ID}.${DATASET_NAME}.knowledge_chunks\` (
 ```bash
 cd functions/upload_kb
 # Deploy or update cloud function with name `upload-kb`
-gcloud functions deploy upload-kb
-  --gen2
-  --runtime python312
-  --region ${REGION}
-  --source .
-  --entry-point upload_kb
-  --trigger-http
-  --allow-unauthenticated # allow public HTTP access
+gcloud functions deploy upload-kb \
+  --gen2 \
+  --runtime python312 \
+  --region ${REGION} \
+  --source . \
+  --entry-point upload_kb \
+  --trigger-http \
+  --allow-unauthenticated \
   --set-env-vars BUCKET_NAME=${BUCKET_NAME}
 # Tip: you can pass environment variables using --set-env-vars, and cloud function can access it using os.environ.get("ENV_VAR_NAME")
 ```
@@ -168,23 +169,38 @@ gsutil ls gs://${BUCKET_NAME}/knowledge-base/
 ### 1.4 Deploy & Test `process-kb-document`
 
 This function is triggered when a file is uploaded to the 'knowledge-base/' folder in Cloud Storage.
+It should implement an **upsert strategy**: before inserting new chunks, delete any existing rows in BigQuery with the same `source_document` so re-uploading a document does not create duplicates.
 
 **Deploy:**
 
 ```bash
 cd functions/process_kb
-gcloud functions deploy process-kb-document
-  --gen2
-  --runtime python312
-  --region ${REGION}
-  --source .
-  --entry-point process_kb_document
-  --trigger-event-filters="type=google.cloud.storage.object.v1.finalized"
-  --trigger-event-filters="bucket=${BUCKET_NAME}"
-  --memory 1Gi
-  --timeout 540s
+gcloud functions deploy process-kb-document \
+  --gen2 \
+  --runtime python312 \
+  --region ${REGION} \
+  --source . \
+  --entry-point process_kb_document \
+  --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
+  --trigger-event-filters="bucket=${BUCKET_NAME}" \
+  --memory 1Gi \
+  --timeout 540s \
   --set-env-vars DATASET_NAME=${DATASET_NAME}
 ```
+
+If the deploy fails with `Permission denied while using the Eventarc Service Agent`, this usually means you just enabled `eventarc.googleapis.com` and need to wait a few minutes for the Eventarc service agent and IAM permissions to propagate. Wait a few minutes, then rerun the exact same deploy command.
+
+If the deploy instead fails with `The Cloud Storage service account for your bucket is unable to publish to Cloud Pub/Sub topics in the specified project`, waiting will not fix it. Grant the bucket's Cloud Storage service agent the Pub/Sub Publisher role:
+
+```bash
+GCS_SA=$(gcloud storage service-agent --project=${PROJECT_ID})
+
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:${GCS_SA}" \
+  --role="roles/pubsub.publisher"
+```
+
+Then rerun the same `gcloud functions deploy process-kb-document ...` command.
 
 **Trigger Processing:**
 Upload your knowledge base documents in `kb_docs/` folder:
@@ -212,14 +228,14 @@ This function is used to get a RAG retrieval result from the knowledge base.
 
 ```bash
 cd functions/retrieve_kb
-gcloud functions deploy retrieve-kb
-  --gen2
-  --runtime python312
-  --region ${REGION}
-  --source .
-  --entry-point retrieve_kb
-  --trigger-http
-  --allow-unauthenticated
+gcloud functions deploy retrieve-kb \
+  --gen2 \
+  --runtime python312 \
+  --region ${REGION} \
+  --source . \
+  --entry-point retrieve_kb \
+  --trigger-http \
+  --allow-unauthenticated \
   --set-env-vars DATASET_NAME=${DATASET_NAME}
 ```
 
@@ -264,14 +280,14 @@ gcloud pubsub subscriptions create support-tickets-sub --topic support-tickets -
 
 ```bash
 cd functions/publish_ticket
-gcloud functions deploy publish-ticket
-  --gen2
-  --runtime python312
-  --region ${REGION}
-  --source .
-  --entry-point publish_ticket
-  --trigger-http
-  --allow-unauthenticated
+gcloud functions deploy publish-ticket \
+  --gen2 \
+  --runtime python312 \
+  --region ${REGION} \
+  --source . \
+  --entry-point publish_ticket \
+  --trigger-http \
+  --allow-unauthenticated \
   --set-env-vars PROJECT_ID=${PROJECT_ID},TOPIC_NAME=support-tickets  # if you name the topic differently, change it here
 ```
 
@@ -346,6 +362,24 @@ python3 ticket_processor.py \
   --setup_file=$(pwd)/setup.py
 ```
 
+If submission fails with a `stage_file_with_retry ... 403` error while uploading to `gs://${BUCKET_NAME}/temp` or `gs://${BUCKET_NAME}/staging`, first authenticate Application Default Credentials:
+
+```bash
+gcloud auth application-default login
+```
+
+If it still fails, grant the default Compute Engine service account access to bucket objects in your Dataflow staging bucket:
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
+
+gcloud storage buckets add-iam-policy-binding gs://${BUCKET_NAME} \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+```
+
+Then rerun the same `python3 ticket_processor.py ...` command. Warnings about `crcmod`, bucket soft delete, or `sdist` are not the root cause of this 403.
+
 > Note: this python script is only a **launcher**; the actual dataflow job will run in GCP. You can kill this python process after the job is launched.
 
 **Test Dataflow Job:**
@@ -375,15 +409,15 @@ To make it easier to autograder, we will use a function to query the ticket reso
 
 ```bash
 cd functions/get_ticket_resolutions
-gcloud functions deploy get-ticket-resolutions
-  --gen2
-  --runtime python312
-  --region ${REGION}
-  --source .
-  --entry-point get_ticket_resolutions
-  --trigger-http
-  --allow-unauthenticated
-  --memory 512Mi
+gcloud functions deploy get-ticket-resolutions \
+  --gen2 \
+  --runtime python312 \
+  --region ${REGION} \
+  --source . \
+  --entry-point get_ticket_resolutions \
+  --trigger-http \
+  --allow-unauthenticated \
+  --memory 512Mi \
   --set-env-vars PROJECT_ID=${PROJECT_ID},DATASET_NAME=${DATASET_NAME}
 ```
 
@@ -415,13 +449,13 @@ source gcloud_init.sh && bash self_check.sh
 
 ### Autograder
 
-| Test      | What is checked                                                                                | Points  |
-| --------- | ---------------------------------------------------------------------------------------------- | ------- |
-| T1        | Upload 3 hidden KB documents via `upload_kb`                                                   | 10      |
-| T2        | `retrieve_kb`: sentinel in chunks (3 pts/doc) + random value in chunk (7 pts/doc)              | 30      |
-| T3        | Publish 5 hidden tickets via `publish_ticket`                                                  | 10      |
-| T4        | Resolution fields present (10 pts) + random values in `suggested_solution` (8 pts × 5 tickets) | 50      |
-| **Total** |                                                                                                | **100** |
+| Test      | What is checked                                              | Points  |
+| --------- | ------------------------------------------------------------ | ------- |
+| T1        | Upload 3 hidden KB documents via `upload_kb`                 | 10      |
+| T2        | `retrieve_kb`: sentinel, random value, and source match      | 30      |
+| T3        | Publish 5 hidden tickets via `publish_ticket`                | 10      |
+| T4        | Resolution: ticket_id, suggested_solution, and random values | 50      |
+| **Total** |                                                              | **100** |
 
 > **Security Note:** All tests use hidden KB documents with randomly generated numeric facts unique to each grading run.
 >
