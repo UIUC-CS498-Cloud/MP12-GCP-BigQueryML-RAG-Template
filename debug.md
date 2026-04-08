@@ -6,17 +6,17 @@ Use this section when the autograder reports an error. Find the failing test, ma
 
 ### T1 – upload_kb (10 pts)
 
-**`upload_kb unreachable` / connection error / timeout**
+#### `upload_kb unreachable` / connection error / timeout
 
 - Check that the Cloud Function is deployed: `gcloud functions describe upload-kb --gen2 --region ${REGION}`
 - Verify `--allow-unauthenticated` was set during deploy: `gcloud functions describe upload-kb --gen2 --region ${REGION} --format="value(serviceConfig.ingressSettings)"` (expect `ALLOW_ALL`)
 - Re-deploy with the correct `--set-env-vars BUCKET_NAME=...`
 
-**HTTP 400 "No file part"**
+#### HTTP 400 "No file part"
 
 - Your function expects `multipart/form-data` with a field named `file`. Do not change the field name.
 
-**HTTP 500**
+#### HTTP 500
 
 - Check `BUCKET_NAME` env var: `gcloud functions describe upload-kb --gen2 --region ${REGION} --format="value(serviceConfig.environmentVariables)"`
 - Check logs: `gcloud functions logs read upload-kb --gen2 --region ${REGION} --limit 20`
@@ -27,7 +27,7 @@ Use this section when the autograder reports an error. Find the failing test, ma
 
 This test uploads hidden KB documents and polls `retrieve_kb` to verify they are indexed and searchable.
 
-**HTTP 500 from retrieve_kb**
+#### HTTP 500 from retrieve_kb
 
 - Check `DATASET_NAME` env var on the function.
 - Verify the `knowledge_chunks` table exists and has rows:
@@ -37,10 +37,11 @@ This test uploads hidden KB documents and polls `retrieve_kb` to verify they are
 - If count is 0, check `process_kb` logs for insertion errors.
 - Vertex AI embedding API may be disabled: ensure `aiplatform.googleapis.com` is enabled.
 
-**Empty `chunks` list / Hidden values not found**
+#### Empty `chunks` list / Hidden values not found
 
 - **`process_kb` trigger not configured** – The function must be triggered by `google.cloud.storage.object.v1.finalized` on `${BUCKET_NAME}`.
 - **Eventarc service agent propagation error during deploy** – If deployment failed with `Permission denied while using the Eventarc Service Agent`, this should only happen when `eventarc.googleapis.com` was just enabled. Wait a few minutes and redeploy. If it still fails, run:
+
   ```bash
   PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
   EVENTARC_SA="service-${PROJECT_NUMBER}@gcp-sa-eventarc.iam.gserviceaccount.com"
@@ -50,13 +51,17 @@ This test uploads hidden KB documents and polls `retrieve_kb` to verify they are
     --filter="bindings.members:serviceAccount:${EVENTARC_SA}" \
     --format="table(bindings.role)"
   ```
+
   If `roles/eventarc.serviceAgent` is missing, run:
+
   ```bash
   gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --member="serviceAccount:${EVENTARC_SA}" \
     --role="roles/eventarc.serviceAgent"
   ```
+
 - **Cloud Storage service account cannot publish to Pub/Sub** – If deployment failed with `The Cloud Storage service account for your bucket is unable to publish to Cloud Pub/Sub topics in the specified project`, grant the bucket's Cloud Storage service agent the Pub/Sub Publisher role:
+
   ```bash
   GCS_SA=$(gcloud storage service-agent --project=${PROJECT_ID})
 
@@ -64,7 +69,9 @@ This test uploads hidden KB documents and polls `retrieve_kb` to verify they are
     --member="serviceAccount:${GCS_SA}" \
     --role="roles/pubsub.publisher"
   ```
+
   Then rerun:
+
   ```bash
   gcloud functions deploy process-kb-document \
     --gen2 \
@@ -78,16 +85,17 @@ This test uploads hidden KB documents and polls `retrieve_kb` to verify they are
     --timeout 540s \
     --set-env-vars DATASET_NAME=${DATASET_NAME}
   ```
+
 - **`process_kb` is crashing** – Check logs: `gcloud functions logs read process-kb-document --gen2 --region ${REGION} --limit 50`
 - **Stale Data / Duplicate Chunks** – If the autograder runs multiple times, BigQuery may contain multiple versions of the same "hidden" document.
   - **Upsert Strategy:** Ensure `process_kb` deletes existing chunks for the same `source_document` before inserting.
 - **Embedding quota** – Vertex AI `text-embedding-004` has quota limits. Wait and re-submit.
 
-**`indexed but source mismatch` (3/10 points)**
+#### `indexed but source mismatch`
 
 - The autograder found the `sentinel` string but the `source` field in the response did not match the expected filename (e.g., `hidden_loyalty_12345.md`). Check `retrieve_kb/main.py` to ensure it returns the correct `source` field.
 
-**Similarity scores not in [0,1]**
+#### Similarity scores not in [0,1]
 
 - Verify the SQL uses `1 - ML.DISTANCE(..., 'COSINE')` (cosine similarity, not raw distance).
 
@@ -95,13 +103,13 @@ This test uploads hidden KB documents and polls `retrieve_kb` to verify they are
 
 ### T3 – publish_ticket (10 pts)
 
-**HTTP 500**
+#### HTTP 500
 
 - Check `PROJECT_ID` and `TOPIC_NAME` env vars on the function.
 - Verify the Pub/Sub topic exists: `gcloud pubsub topics list`
 - If missing: `gcloud pubsub topics create support-tickets`
 
-**`missing message_id or ticket_id`**
+#### `missing message_id or ticket_id`
 
 - The function must return `{"message_id": "...", "ticket_id": "..."}`.
 
@@ -111,43 +119,107 @@ This test uploads hidden KB documents and polls `retrieve_kb` to verify they are
 
 This test polls `get_ticket_resolutions` until the hidden tickets are processed by Dataflow and verified.
 
-**`No resolutions after 60s`**
+#### No resolutions received — Pub/Sub backlog from previous runs
+
+Previous autograder runs may have left unacknowledged tickets in the Pub/Sub subscription. Dataflow will process those stale tickets first, causing the new autograder tickets to be delayed past the 60-second polling window. Purge the backlog before resubmitting:
+
+```bash
+gcloud pubsub subscriptions seek support-tickets-sub \
+  --to-time=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+Then rerun `submit.py`.
+
+#### No resolutions received — Dataflow not running or erroring
 
 - Check if Dataflow job is `Running`: `gcloud dataflow jobs list --region=${REGION} --filter="state=Running"`
 - Check Pub/Sub subscription for backlog: `gcloud pubsub subscriptions describe support-tickets-sub`
 - Check Dataflow logs for runtime errors (e.g., Gemini API key missing, BigQuery permission denied).
-- **Dataflow submission fails with `stage_file_with_retry ... 403`** – This happens before the job starts running, while Beam is uploading files to `gs://${BUCKET_NAME}/temp` or `gs://${BUCKET_NAME}/staging`.
-  First, authenticate Application Default Credentials:
-  ```bash
-  gcloud auth application-default login
-  ```
-  If it still fails, grant the default Compute Engine service account access to bucket objects:
-  ```bash
-  PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
 
-  gcloud storage buckets add-iam-policy-binding gs://${BUCKET_NAME} \
-    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-    --role="roles/storage.objectAdmin"
-  ```
-  Then rerun the Dataflow command. Warnings about `crcmod`, bucket soft delete, or `sdist` are not the root cause of the 403.
+#### Dataflow submission fails with `stage_file_with_retry ... 403`
 
-**`incomplete resolution – missing fields`**
+This happens before the job starts running, while Beam is uploading files to `gs://${BUCKET_NAME}/temp` or `gs://${BUCKET_NAME}/staging`.
+
+First, authenticate Application Default Credentials:
+
+```bash
+gcloud auth application-default login
+```
+
+If it still fails, grant the default Compute Engine service account access to bucket objects:
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
+
+gcloud storage buckets add-iam-policy-binding gs://${BUCKET_NAME} \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+```
+
+Then rerun the Dataflow command. Warnings about `crcmod`, bucket soft delete, or `sdist` are not the root cause of the 403.
+
+#### Dataflow Worker Pool Exhausted
+
+If the job appears on Cloud Console but workers fail to start with an error like:
+
+> Startup of the worker pool in us-central1 failed to bring up any of the desired 1 workers. This is likely a quota issue or a Compute Engine stockout. ... ZONE_RESOURCE_POOL_EXHAUSTED: Instance creation failed: The zone 'projects/.../zones/us-central1-a' does not have enough resources available to fulfill the request.
+
+The zone is temporarily out of capacity. Cancel the failed job and try the following in order:
+
+**Step 1:** Retry with a different machine type (e.g. `e2-medium` or `n1-standard-1`):
+
+```bash
+python3 ticket_processor.py \
+  --project=${PROJECT_ID} \
+  --region=${REGION} \
+  --runner=DataflowRunner \
+  --streaming \
+  --num_workers=1 \
+  --machine_type=e2-medium \
+  --setup_file=$(pwd)/setup.py
+```
+
+**Step 2:** If the issue persists, pin the zone to `us-central1-c` (verified available for Spring 2026 — this may change in future semesters):
+
+```bash
+python3 ticket_processor.py \
+  --project=${PROJECT_ID} \
+  --region=${REGION} \
+  --zone=us-central1-c \
+  --runner=DataflowRunner \
+  --streaming \
+  --num_workers=1 \
+  --machine_type=e2-small \
+  --setup_file=$(pwd)/setup.py
+```
+
+#### Resolutions received but values missing from `suggested_solution`
+
+Query the most recent 5 resolutions to inspect what was retrieved and what Gemini generated:
+
+```bash
+bq query --use_legacy_sql=false "
+SELECT
+  ticket_id,
+  retrieved_kb_chunks,
+  suggested_solution
+FROM \`${PROJECT_ID}.${DATASET_NAME}.ticket_resolutions\`
+ORDER BY ticket_id DESC
+LIMIT 5"
+```
+
+- **`retrieved_kb_chunks` is empty or missing hidden doc content** → RAG problem: your vector search isn't finding the hidden KB documents. Test your `retrieve_kb` endpoint directly with the ticket message to confirm.
+- **`retrieved_kb_chunks` contains hidden doc content but values are absent from `suggested_solution`** → LLM prompt problem: Gemini is not being instructed to use the retrieved context. Ensure your prompt explicitly includes the chunks and tells Gemini to answer using only the provided context, quoting exact numeric values verbatim.
+
+#### `incomplete resolution – missing fields`
 
 - Each resolution must contain at least `ticket_id` and `suggested_solution`.
-
-**`expected value not in solution`**
-
-- Gemini is not correctly grounding the response using the hidden KB documents.
-- Ensure the Dataflow pipeline:
-  1. Performs a vector search using the ticket message.
-  2. Includes the retrieved text in the Gemini prompt.
-  3. Maps the LLM output to the BigQuery schema.
 
 ---
 
 ## Useful Commands
 
-**BigQuery: List all source documents and chunk counts**
+#### BigQuery: List all source documents and chunk counts
 
 ```bash
 bq query --use_legacy_sql=false "
@@ -157,7 +229,7 @@ GROUP BY source_document
 ORDER BY chunk_count DESC;"
 ```
 
-**BigQuery: Delete "hidden" documents**
+#### BigQuery: Delete "hidden" documents
 
 ```bash
 bq query --use_legacy_sql=false --destination_table=${DATASET_NAME}.knowledge_chunks --replace "
@@ -165,14 +237,15 @@ SELECT * FROM \`${PROJECT_ID}.${DATASET_NAME}.knowledge_chunks\`
 WHERE NOT source_document LIKE 'hidden%';"
 ```
 
-**Dataflow: Check if the streaming job is running**
+#### Dataflow: Check if the streaming job is running
 
 ```bash
 gcloud dataflow jobs list --region=${REGION} --filter="state=Running"
 ```
 
-**Pub/Sub: Check for unacknowledged messages (backlog)**
+#### Pub/Sub: Purge stale messages
 
 ```bash
-gcloud pubsub subscriptions describe support-tickets-sub --format="value(numUndeliveredMessages)"
+gcloud pubsub subscriptions seek support-tickets-sub \
+  --to-time=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 ```

@@ -362,23 +362,9 @@ python3 ticket_processor.py \
   --setup_file=$(pwd)/setup.py
 ```
 
-If submission fails with a `stage_file_with_retry ... 403` error while uploading to `gs://${BUCKET_NAME}/temp` or `gs://${BUCKET_NAME}/staging`, first authenticate Application Default Credentials:
+If submission fails with a `stage_file_with_retry ... 403` error, see [Dataflow submission fails with 403](debug.md#dataflow-submission-fails-with-stage_file_with_retry--403) in the debugging guide.
 
-```bash
-gcloud auth application-default login
-```
-
-If it still fails, grant the default Compute Engine service account access to bucket objects in your Dataflow staging bucket:
-
-```bash
-PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
-
-gcloud storage buckets add-iam-policy-binding gs://${BUCKET_NAME} \
-  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-  --role="roles/storage.objectAdmin"
-```
-
-Then rerun the same `python3 ticket_processor.py ...` command. Warnings about `crcmod`, bucket soft delete, or `sdist` are not the root cause of this 403.
+If workers fail to start with a `ZONE_RESOURCE_POOL_EXHAUSTED` error, see [Dataflow Worker Pool Exhausted](debug.md#dataflow-worker-pool-exhausted) in the debugging guide.
 
 > Note: this python script is only a **launcher**; the actual dataflow job will run in GCP. You can kill this python process after the job is launched.
 
@@ -461,7 +447,7 @@ source gcloud_init.sh && bash self_check.sh
 >
 > **Sequential Dependency:** A test scoring 0 skips all subsequent tests (T1 → T2 → T3 → T4).
 
-Submit using [submit.py](submit.py). Tests take less than 5 minutes.
+Submit using [submit.py](submit.py). Tests take less than 5 minutes. Real-time feedback will be provided by the autograder.
 
 ---
 
