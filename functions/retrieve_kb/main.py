@@ -9,7 +9,7 @@ import json
 bq_client = bigquery.Client()
 client = genai.Client(vertexai=True, location='us-central1')
 
-EMBEDDING_MODEL = "text-embedding-004"
+EMBEDDING_MODEL = "text-embedding-004"  # TODO @students: test if gemini-embedding-001 works
 DATASET_NAME = os.environ.get('DATASET_NAME', 'support_analytics')
 
 @functions_framework.http

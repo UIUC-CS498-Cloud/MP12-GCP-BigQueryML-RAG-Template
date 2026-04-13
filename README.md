@@ -37,9 +37,16 @@ Spring 2026:
 >
 > Coupon valid through: 1/13/2027
 
-### 0.1 Authentication
+### 0.1 Environment setup
 
-First, authenticate your CLI with your Google account:
+First clone the repository:
+
+```bash
+git clone https://github.com/UIUC-CS498-Cloud/MP12-GCP-BigQueryML-RAG-Template.git
+cd MP12-GCP-BigQueryML-RAG-Template
+```
+
+Then ensure you have the [Google Cloud CLI installed](https://cloud.google.com/sdk/docs/install), and authenticate your CLI with your Google account:
 
 ```bash
 gcloud auth login
@@ -85,6 +92,8 @@ gcloud services enable \
    BUCKET_NAME=your-unique-bucket-name
    DATASET_NAME=support_analytics
    ```
+
+   Note: `BUCKET_NAME` needs to be globally unique in GCP, so add your name or something.
 
 2. Initialize the environment (do this every time you open a new terminal):
 
@@ -270,7 +279,8 @@ And a Dataflow job to process tickets.
 ### 2.1 Create Pub/Sub Topic & Subscription
 
 ```bash
-gcloud pubsub topics create support-tickets  # creates a topic named support-tickets
+# creates a topic named support-tickets
+gcloud pubsub topics create support-tickets
 gcloud pubsub subscriptions create support-tickets-sub --topic support-tickets --ack-deadline 60
 ```
 
@@ -288,7 +298,8 @@ gcloud functions deploy publish-ticket \
   --entry-point publish_ticket \
   --trigger-http \
   --allow-unauthenticated \
-  --set-env-vars PROJECT_ID=${PROJECT_ID},TOPIC_NAME=support-tickets  # if you name the topic differently, change it here
+  --set-env-vars PROJECT_ID=${PROJECT_ID},TOPIC_NAME=support-tickets
+# change --set-env-vars if you use a different topic name
 ```
 
 **Test:**
@@ -351,7 +362,7 @@ Complete the implementation in `dataflow/ticket_processor.py`.
 
 ```bash
 source .venv/bin/activate
-uv pip install "build" "setuptools>=68" "wheel"  # necessary for building the pipeline
+uv pip install "build" "setuptools>=68" "wheel"
 python3 ticket_processor.py \
   --project=${PROJECT_ID} \
   --region=${REGION} \

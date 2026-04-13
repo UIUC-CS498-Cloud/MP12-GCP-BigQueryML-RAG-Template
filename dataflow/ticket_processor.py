@@ -17,7 +17,7 @@ import argparse
 import sys
 
 # Constants
-EMBEDDING_MODEL = "text-embedding-004"
+EMBEDDING_MODEL = "text-embedding-004"  # TODO @students: test if gemini-embedding-001 works
 LLM_MODEL = "gemini-2.5-flash"
 
 

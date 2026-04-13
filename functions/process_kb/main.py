@@ -14,7 +14,7 @@ bq_client = bigquery.Client()
 # Initialize Gemini client for Vertex AI
 client = genai.Client(vertexai=True, location="us-central1")
 
-EMBEDDING_MODEL = "text-embedding-004"
+EMBEDDING_MODEL = "text-embedding-004"  # TODO @students: test if gemini-embedding-001 works
 CHUNK_SIZE = 500  # characters per chunk
 OVERLAP = 50  # character overlap between chunks
 DATASET_NAME = os.environ.get("DATASET_NAME", "support_analytics")
