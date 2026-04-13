@@ -423,7 +423,7 @@ gcloud functions deploy get-ticket-resolutions \
 **Checklist**
 
 - Cloud Functions: `upload-kb`, `process-kb-document`, `publish-ticket`, `get-ticket-resolutions`
-- BigQuery tables: `kb_documents`, `ticket_resolutions`
+- BigQuery tables: `knowledge_chunks`, `ticket_resolutions`
 - Pub/Sub: `support-tickets` topic and subscription
 - Dataflow: `ticket-processor` job
 

@@ -33,7 +33,7 @@ def upload_kb(request):
     if not bucket_name:
         return "BUCKET_NAME environment variable not set", 500
 
-    # TODO: Upload the file to the 'knowledge-base/' folder in Clous Storage bucket
+    # TODO: Upload the file to the 'knowledge-base/' folder in Cloud Storage bucket
     # e.g. a local file "billing_information.md" -> gs://[BUCKET_NAME]/knowledge-base/billing_information.md
 
     return {"status": "success", "filename": file.filename}, 200
