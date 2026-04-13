@@ -125,7 +125,7 @@ Previous autograder runs may have left unacknowledged tickets in the Pub/Sub sub
 
 ```bash
 gcloud pubsub subscriptions seek support-tickets-sub \
-  --to-time=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  --time=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 ```
 
 Then rerun `submit.py`.
@@ -247,5 +247,5 @@ gcloud dataflow jobs list --region=${REGION} --filter="state=Running"
 
 ```bash
 gcloud pubsub subscriptions seek support-tickets-sub \
-  --to-time=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  --time=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 ```
